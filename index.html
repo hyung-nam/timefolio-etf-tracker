@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TIMEFOLIO ETF 추적</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 { font-size: 28px; margin-bottom: 5px; }
+        .header p { font-size: 14px; opacity: 0.9; }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid #e0e0e0;
+            background: #fafafa;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            background: none;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            color: #666;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px;
+        }
+
+        .tab-button.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+            background: white;
+        }
+
+        .tab-button:hover { background: white; color: #667eea; }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 15px;
+            padding: 20px;
+            background: #fafafa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .control-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .control-group input,
+        .control-group select {
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s ease;
+        }
+
+        .control-group input:focus,
+        .control-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            overflow-y: auto;
+            max-height: 70vh;
+            position: relative;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 13px;
+        }
+
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            background: #f0f0f0;
+        }
+
+        th {
+            background: #f0f0f0;
+            padding: 12px 10px;
+            text-align: right;
+            font-weight: 600;
+            color: #555;
+            border-bottom: 2px solid #ddd;
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        th.col-ticker, th.col-name, th.col-change {
+            position: sticky;
+            background: #f0f0f0;
+            z-index: 6;
+            resize: horizontal;
+            overflow: hidden;
+            cursor: col-resize;
+            user-select: none;
+        }
+
+        th.col-ticker { left: 0; text-align: left; min-width: 100px; }
+        th.col-name { left: 100px; text-align: left; min-width: 160px; }
+        th.col-change { left: 260px; min-width: 80px; border-right: 2px solid #ddd; z-index: 6; }
+
+        th.col-ticker::after, th.col-name::after, th.col-change::after {
+            content: '';
+            position: absolute;
+            right: 0; top: 0;
+            width: 4px; height: 100%;
+            cursor: col-resize;
+            background: linear-gradient(to right, transparent 0%, #ccc 40%, #ccc 60%, transparent 100%);
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        th.col-ticker:hover::after, th.col-name:hover::after, th.col-change:hover::after { opacity: 1; }
+
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid #f0f0f0;
+            text-align: right;
+        }
+
+        td.col-ticker, td.col-name, td.col-change {
+            position: sticky;
+            background: white;
+            z-index: 2;
+        }
+
+        td.col-ticker { left: 0; text-align: left; min-width: 100px; font-weight: 600; color: #333; }
+        td.col-name { left: 100px; text-align: left; min-width: 160px; color: #666; }
+        td.col-change { left: 260px; min-width: 80px; border-right: 2px solid #f0f0f0; font-weight: 600; }
+
+        tbody tr:hover { background: #fafafa; }
+        tbody tr:hover td { background: #fafafa; }
+
+        .change-positive { color: #27ae60; }
+        .change-negative { color: #e74c3c; }
+        .change-neutral { color: #999; }
+
+        .empty-state { text-align: center; padding: 40px; color: #999; font-size: 14px; }
+
+        .info-bar {
+            padding: 15px 20px;
+            background: #e8f4f8;
+            border-bottom: 1px solid #b3d9e8;
+            font-size: 13px;
+            color: #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .loading-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+            font-size: 16px;
+        }
+
+        .loading-state .spinner {
+            display: inline-block;
+            width: 30px; height: 30px;
+            border: 3px solid #e0e0e0;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 12px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Summary Section */
+        .summary-section {
+            border-top: 2px solid #e0e0e0;
+            padding: 16px 20px;
+            background: #fafbfc;
+        }
+
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .summary-title { font-weight: 700; font-size: 14px; color: #333; }
+
+        .copy-btn {
+            padding: 4px 12px;
+            font-size: 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+            color: #555;
+            transition: all 0.15s;
+        }
+
+        .copy-btn:hover { background: #f0f0f0; border-color: #999; }
+        .copy-btn.copied { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+
+        .summary-content { font-size: 13px; line-height: 1.8; color: #444; }
+        .summary-line { margin-bottom: 2px; }
+        .summary-label { font-weight: 600; display: inline; }
+        .summary-label.label-new-in { color: #1565c0; }
+        .summary-label.label-new-out { color: #c62828; }
+        .summary-label.label-buy { color: #2e7d32; }
+        .summary-label.label-sell { color: #d84315; }
+        .summary-items { color: #555; }
+        .summary-none { color: #999; font-style: italic; }
+        .summary-fallback { color: #999; font-size: 13px; padding: 8px 0; }
+
+        /* 변동요약 탭 전용 스타일 */
+        .summary-tab-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px 12px;
+        }
+
+        .summary-tab-title { font-size: 16px; font-weight: 700; color: #333; }
+
+        .summary-tab-buttons { display: flex; gap: 8px; }
+
+        .integrated-block { padding: 0 20px 16px; font-size: 13px; line-height: 1.9; color: #444; }
+
+        .integrated-group-title {
+            font-weight: 700;
+            font-size: 14px;
+            color: #1a1a1a;
+            margin-top: 12px;
+            margin-bottom: 2px;
+        }
+
+        .integrated-group-title:first-child { margin-top: 0; }
+
+        .section-divider { border-top: 2px solid #e0e0e0; margin: 0 20px; }
+
+        .etf-block { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; }
+        .etf-block:last-child { border-bottom: none; }
+
+        .etf-block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .etf-block-name { font-weight: 700; font-size: 14px; color: #1a1a1a; }
+
+        .etf-copy-btn {
+            padding: 2px 8px;
+            font-size: 11px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            background: #fff;
+            cursor: pointer;
+            color: #777;
+            transition: all 0.15s;
+        }
+
+        .etf-copy-btn:hover { background: #f0f0f0; border-color: #999; }
+        .etf-copy-btn.copied { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+
+        .etf-block-content { font-size: 13px; line-height: 1.8; color: #444; }
+
+        @media (max-width: 1024px) {
+            .controls { grid-template-columns: 1fr 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .controls { grid-template-columns: 1fr; }
+            .tabs { flex-direction: column; }
+            .tab-button { text-align: center; }
+            .table-wrapper { max-height: 50vh; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>TIMEFOLIO ETF 추적</h1>
+            <p>17개 액티브 ETF 포트폴리오 분석</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('holdings')">
+                [구성종목] 가중치
+            </button>
+            <button class="tab-button" onclick="switchTab('shares')">
+                [수량] 보유주식
+            </button>
+            <button class="tab-button" onclick="switchTab('summary')">
+                [변동요약] 비중
+            </button>
+            <button class="tab-button" onclick="switchTab('summary_shares')">
+                [변동요약] 수량
+            </button>
+        </div>
+
+        <div class="info-bar">
+            <span id="infoText">데이터 로딩 중...</span>
+            <span id="lastUpdated" style="font-size:12px;color:#666;"></span>
+        </div>
+
+        <div id="controlsArea" class="controls" style="display:none;">
+            <div class="control-group">
+                <label>ETF 선택</label>
+                <select id="etfSelector" onchange="render()"></select>
+            </div>
+            <div class="control-group">
+                <label>종목 검색</label>
+                <input type="text" id="searchInput" placeholder="종목코드 또는 이름 검색..." oninput="render()">
+            </div>
+            <div class="control-group">
+                <label>날짜 선택 (비교 기준)</label>
+                <select id="dateSelector" onchange="render()"></select>
+            </div>
+        </div>
+
+        <div id="contentArea">
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <div>데이터를 불러오는 중입니다...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ─── 전역 상태 ──────────────────────────────────────
+        let STATE = {
+            tab: 'holdings',         // holdings | shares | summary | summary_shares
+            holdingsData: null,      // { dates: [...], data: { etfName: { date: rows } } }
+            sharesData: null,
+            summaryWeight: null,
+            summaryShares: null,
+            lastUpdated: null,
+            loaded: false,
+            sortCol: null,
+            sortDir: 'asc'
+        };
+
+        const GLOBAL_ETFS = [
+            'TIME 글로벌탑픽액티브', 'TIME 글로벌바이오액티브', 'TIME 글로벌우주테크&방산액티브',
+            'TIME 미국S&P500액티브', 'TIME 차이나AI테크액티브', 'TIME 글로벌AI인공지능액티브',
+            'TIME 미국나스닥100액티브', 'TIME 미국배당다우존스액티브',
+            'TIME 미국나스닥100채권혼합50액티브', 'TIME 글로벌소비트렌드액티브'
+        ];
+
+        const DOMESTIC_ETFS = [
+            'TIME K신재생에너지액티브', 'TIME K바이오액티브', 'TIME Korea플러스배당액티브',
+            'TIME 코스피액티브', 'TIME 코리아밸류업액티브', 'TIME K이노베이션액티브', 'TIME K컬처액티브'
+        ];
+
+        // ─── 데이터 로딩 ─────────────────────────────────────
+
+        async function fetchJSON(url) {
+            try {
+                const res = await fetch(url);
+                if (!res.ok) return null;
+                return await res.json();
+            } catch (e) {
+                console.warn('Fetch failed:', url, e);
+                return null;
+            }
+        }
+
+        async function loadData() {
+            const [holdings, shares, sumW, sumS, meta] = await Promise.all([
+                fetchJSON('data/latest/holdings.json'),
+                fetchJSON('data/latest/shares.json'),
+                fetchJSON('data/latest/summaries_weight.json'),
+                fetchJSON('data/latest/summaries_shares.json'),
+                fetchJSON('data/latest/last_updated.json')
+            ]);
+
+            STATE.holdingsData = holdings;
+            STATE.sharesData = shares;
+            STATE.summaryWeight = sumW;
+            STATE.summaryShares = sumS;
+            STATE.lastUpdated = meta;
+            STATE.loaded = true;
+
+            initializeControls();
+            render();
+        }
+
+        // ─── 초기화 ──────────────────────────────────────────
+
+        function initializeControls() {
+            const data = STATE.holdingsData || STATE.sharesData;
+            if (!data) return;
+
+            // ETF 셀렉터
+            const etfSel = document.getElementById('etfSelector');
+            etfSel.innerHTML = '';
+            const etfNames = Object.keys(data.data);
+            etfNames.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                etfSel.appendChild(opt);
+            });
+
+            // 날짜 셀렉터
+            const dateSel = document.getElementById('dateSelector');
+            dateSel.innerHTML = '';
+            data.dates.forEach(d => {
+                const opt = document.createElement('option');
+                opt.value = d;
+                opt.textContent = d;
+                dateSel.appendChild(opt);
+            });
+
+            // 정보 표시
+            document.getElementById('infoText').textContent = '데이터 기준일: ' + data.dates[0];
+
+            if (STATE.lastUpdated) {
+                document.getElementById('lastUpdated').textContent =
+                    'Last Updated: ' + STATE.lastUpdated.updated_at;
+            }
+
+            document.getElementById('controlsArea').style.display = '';
+        }
+
+        // ─── 탭 전환 ─────────────────────────────────────────
+
+        function switchTab(mode) {
+            STATE.tab = mode;
+            STATE.sortCol = null;
+            STATE.sortDir = 'asc';
+
+            document.querySelectorAll('.tab-button').forEach((btn, i) => {
+                btn.classList.toggle('active',
+                    (i === 0 && mode === 'holdings') ||
+                    (i === 1 && mode === 'shares') ||
+                    (i === 2 && mode === 'summary') ||
+                    (i === 3 && mode === 'summary_shares')
+                );
+            });
+
+            const controlsNeeded = (mode === 'holdings' || mode === 'shares');
+            document.getElementById('controlsArea').style.display = controlsNeeded ? '' : 'none';
+
+            const data = STATE.holdingsData || STATE.sharesData;
+            if (data) {
+                document.getElementById('infoText').textContent = '데이터 기준일: ' + data.dates[0];
+            }
+
+            render();
+        }
+
+        // ─── 유틸리티 ────────────────────────────────────────
+
+        function parseQuantity(str) {
+            if (str === null || str === undefined) return null;
+            const n = parseInt(String(str).replace(/,/g, ''), 10);
+            return isNaN(n) ? null : n;
+        }
+
+        function parseWeight(str) {
+            if (str === null || str === undefined) return null;
+            const n = parseFloat(str);
+            return isNaN(n) ? null : n;
+        }
+
+        function formatNumber(n) {
+            if (n === null || n === undefined) return '-';
+            return n.toLocaleString();
+        }
+
+        function formatWeight(n) {
+            if (n === null || n === undefined) return '-';
+            return n.toFixed(2);
+        }
+
+        // ─── 메인 렌더 ──────────────────────────────────────
+
+        function render() {
+            if (!STATE.loaded) return;
+
+            const area = document.getElementById('contentArea');
+
+            if (STATE.tab === 'holdings') {
+                renderPivotTable(area, STATE.holdingsData, 'weight');
+            } else if (STATE.tab === 'shares') {
+                renderPivotTable(area, STATE.sharesData, 'shares');
+            } else if (STATE.tab === 'summary') {
+                renderSummaryTab(area, STATE.summaryWeight, STATE.holdingsData, 'weight');
+            } else if (STATE.tab === 'summary_shares') {
+                renderSummaryTab(area, STATE.summaryShares, STATE.sharesData, 'shares');
+            }
+        }
+
+        // ─── 피벗 테이블 렌더링 ──────────────────────────────
+
+        function renderPivotTable(area, mainData, mode) {
+            if (!mainData) {
+                area.innerHTML = '<div class="empty-state">데이터가 없습니다.</div>';
+                return;
+            }
+
+            const etfName = document.getElementById('etfSelector').value;
+            const searchText = document.getElementById('searchInput').value.toLowerCase();
+            const selectedDate = document.getElementById('dateSelector').value;
+            const dates = mainData.dates;
+            const etfData = mainData.data[etfName];
+            if (!etfData) {
+                area.innerHTML = '<div class="empty-state">선택한 ETF의 데이터가 없습니다.</div>';
+                return;
+            }
+
+            // 선택된 날짜의 데이터 (기준)
+            const baseRows = etfData[selectedDate] || [];
+            const valueIndex = mode === 'shares' ? 2 : 3;
+            const parseFn = mode === 'shares' ? parseQuantity : parseWeight;
+            const fmtFn = mode === 'shares' ? formatNumber : formatWeight;
+
+            // 모든 종목을 ticker 기준으로 합치기
+            const tickerMap = {}; // ticker → { name, values: { date: val }, latestRow }
+            for (const date of dates) {
+                const rows = etfData[date] || [];
+                rows.forEach(row => {
+                    const ticker = row[0];
+                    if (!tickerMap[ticker]) {
+                        tickerMap[ticker] = { name: row[1], values: {} };
+                    }
+                    tickerMap[ticker].values[date] = parseFn(row[valueIndex]);
+                });
+            }
+
+            // 변화량 계산 (최신 - 선택일)
+            let items = Object.entries(tickerMap).map(([ticker, info]) => {
+                const latestVal = info.values[dates[0]];
+                const baseVal = info.values[selectedDate];
+                let change = null;
+                if (latestVal !== null && latestVal !== undefined &&
+                    baseVal !== null && baseVal !== undefined) {
+                    change = latestVal - baseVal;
+                }
+                return { ticker, name: info.name, values: info.values, change };
+            });
+
+            // 검색 필터
+            if (searchText) {
+                items = items.filter(item =>
+                    item.ticker.toLowerCase().includes(searchText) ||
+                    item.name.toLowerCase().includes(searchText)
+                );
+            }
+
+            // 정렬
+            if (STATE.sortCol !== null) {
+                items.sort((a, b) => {
+                    let va, vb;
+                    if (STATE.sortCol === 'ticker') { va = a.ticker; vb = b.ticker; }
+                    else if (STATE.sortCol === 'name') { va = a.name; vb = b.name; }
+                    else if (STATE.sortCol === 'change') { va = a.change; vb = b.change; }
+                    else { va = a.values[STATE.sortCol]; vb = b.values[STATE.sortCol]; }
+
+                    if (va === null || va === undefined) va = STATE.sortDir === 'asc' ? Infinity : -Infinity;
+                    if (vb === null || vb === undefined) vb = STATE.sortDir === 'asc' ? Infinity : -Infinity;
+
+                    if (typeof va === 'string') return STATE.sortDir === 'asc' ? va.localeCompare(vb, 'ko') : vb.localeCompare(va, 'ko');
+                    return STATE.sortDir === 'asc' ? va - vb : vb - va;
+                });
+            }
+
+            // 테이블 HTML 생성
+            const showChange = dates[0] !== selectedDate;
+            let html = '<div class="table-wrapper"><table><thead><tr>';
+            html += `<th class="col-ticker" onclick="sortBy('ticker')">종목코드${sortIcon('ticker')}</th>`;
+            html += `<th class="col-name" onclick="sortBy('name')">종목명${sortIcon('name')}</th>`;
+            if (showChange) {
+                html += `<th class="col-change" onclick="sortBy('change')">변화${sortIcon('change')}</th>`;
+            }
+            dates.forEach(d => {
+                html += `<th onclick="sortBy('${d}')">${d}${sortIcon(d)}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            if (items.length === 0) {
+                const colSpan = 2 + dates.length + (showChange ? 1 : 0);
+                html += `<tr><td colspan="${colSpan}" class="empty-state">검색 결과가 없습니다.</td></tr>`;
+            } else {
+                items.forEach(item => {
+                    html += '<tr>';
+                    html += `<td class="col-ticker">${item.ticker}</td>`;
+                    html += `<td class="col-name">${item.name}</td>`;
+                    if (showChange) {
+                        let changeClass = 'change-neutral';
+                        let changeText = '-';
+                        if (item.change !== null) {
+                            if (item.change > 0) { changeClass = 'change-positive'; changeText = '+' + fmtFn(item.change); }
+                            else if (item.change < 0) { changeClass = 'change-negative'; changeText = fmtFn(item.change); }
+                            else { changeText = '0'; }
+                        }
+                        html += `<td class="col-change ${changeClass}">${changeText}</td>`;
+                    }
+                    dates.forEach(d => {
+                        const val = item.values[d];
+                        html += `<td>${val !== null && val !== undefined ? fmtFn(val) : '-'}</td>`;
+                    });
+                    html += '</tr>';
+                });
+            }
+
+            html += '</tbody></table></div>';
+
+            // 변동요약 박스 (선택일과 최신일이 다를 때)
+            if (showChange) {
+                html += buildSummaryBox(etfName, mainData, mode, dates[0], selectedDate);
+            }
+
+            area.innerHTML = html;
+        }
+
+        // ─── 변동요약 박스 (피벗 테이블 하단) ─────────────────
+
+        function buildSummaryBox(etfName, mainData, mode, latestDate, prevDate) {
+            const etfData = mainData.data[etfName];
+            if (!etfData) return '';
+
+            const latestRows = etfData[latestDate] || [];
+            const prevRows = etfData[prevDate] || [];
+            const valueIndex = mode === 'shares' ? 2 : 3;
+            const parseFn = mode === 'shares' ? parseQuantity : parseWeight;
+            const threshold = mode === 'shares' ? 10 : 0.5;
+
+            const todayMap = {};
+            const prevMap = {};
+
+            latestRows.forEach(row => {
+                todayMap[row[0]] = { name: row[1], value: parseFn(row[valueIndex]) };
+            });
+            prevRows.forEach(row => {
+                prevMap[row[0]] = { name: row[1], value: parseFn(row[valueIndex]) };
+            });
+
+            const newIn = [], newOut = [], buys = [], sells = [];
+            const allTickers = new Set([...Object.keys(todayMap), ...Object.keys(prevMap)]);
+
+            allTickers.forEach(ticker => {
+                const inToday = ticker in todayMap;
+                const inPrev = ticker in prevMap;
+
+                if (inToday && !inPrev) {
+                    newIn.push([ticker, todayMap[ticker].name, todayMap[ticker].value]);
+                } else if (!inToday && inPrev) {
+                    newOut.push([ticker, prevMap[ticker].name, prevMap[ticker].value]);
+                } else if (inToday && inPrev) {
+                    const tv = todayMap[ticker].value;
+                    const pv = prevMap[ticker].value;
+                    if (tv === null || pv === null) return;
+                    const delta = tv - pv;
+                    if (delta >= threshold) buys.push([ticker, todayMap[ticker].name, delta]);
+                    else if (delta <= -threshold) sells.push([ticker, todayMap[ticker].name, delta]);
+                }
+            });
+
+            newIn.sort((a, b) => a[1].localeCompare(b[1], 'ko'));
+            newOut.sort((a, b) => a[1].localeCompare(b[1], 'ko'));
+            buys.sort((a, b) => b[2] - a[2]);
+            sells.sort((a, b) => a[2] - b[2]);
+
+            const fmtDelta = mode === 'shares'
+                ? v => (v > 0 ? '+' : '') + formatNumber(v)
+                : v => (v > 0 ? '+' : '') + formatWeight(v);
+            const unit = mode === 'shares' ? '주' : '%p';
+
+            let lines = [];
+            lines.push(formatSummaryLine('신규편입', 'label-new-in', newIn, r => `${r[1]}(${r[0]})`));
+            lines.push(formatSummaryLine('신규편출', 'label-new-out', newOut, r => `${r[1]}(${r[0]})`));
+            lines.push(formatSummaryLine('매수(증가)', 'label-buy', buys, r => `${r[1]}(${fmtDelta(r[2])}${unit})`));
+            lines.push(formatSummaryLine('매도(감소)', 'label-sell', sells, r => `${r[1]}(${fmtDelta(r[2])}${unit})`));
+
+            const summaryId = 'summary-box-' + Date.now();
+            let html = '<div class="summary-section">';
+            html += '<div class="summary-header">';
+            html += `<span class="summary-title">변동요약 (${latestDate} vs ${prevDate})</span>`;
+            html += `<button class="copy-btn" onclick="copySummary('${summaryId}')">복사</button>`;
+            html += '</div>';
+            html += `<div class="summary-content" id="${summaryId}">`;
+            html += lines.join('');
+            html += '</div></div>';
+            return html;
+        }
+
+        function formatSummaryLine(label, labelClass, items, formatter) {
+            let html = '<div class="summary-line">';
+            html += `<span class="summary-label ${labelClass}">${label}:</span> `;
+            if (items.length === 0) {
+                html += '<span class="summary-none">없음</span>';
+            } else {
+                html += '<span class="summary-items">' + items.map(formatter).join(', ') + '</span>';
+            }
+            html += '</div>';
+            return html;
+        }
+
+        // ─── 변동요약 탭 렌더링 ──────────────────────────────
+
+        function renderSummaryTab(area, summaryData, mainData, mode) {
+            if (!summaryData) {
+                area.innerHTML = '<div class="empty-state">변동요약 데이터가 없습니다. (비교할 날짜가 2개 이상 필요합니다)</div>';
+                return;
+            }
+
+            const { latestDate, prevDate, summaries } = summaryData;
+            const fmtDelta = mode === 'shares'
+                ? v => (v > 0 ? '+' : '') + formatNumber(v)
+                : v => (v > 0 ? '+' : '') + formatWeight(v);
+            const unit = mode === 'shares' ? '주' : '%p';
+            const modeLabel = mode === 'shares' ? '수량' : '비중';
+
+            let html = '';
+            html += '<div class="summary-tab-header">';
+            html += `<span class="summary-tab-title">변동요약 [${modeLabel}] — ${latestDate} vs ${prevDate}</span>`;
+            html += '<div class="summary-tab-buttons">';
+            html += `<button class="copy-btn" onclick="copyAllSummaries('${mode}')">전체 복사</button>`;
+            html += '</div></div>';
+
+            // 통합 요약
+            html += buildIntegratedSummary(summaries, GLOBAL_ETFS, DOMESTIC_ETFS, fmtDelta, unit, mode);
+
+            // 개별 ETF 블록
+            html += '<div class="section-divider"></div>';
+            const etfOrder = [...GLOBAL_ETFS, ...DOMESTIC_ETFS];
+
+            etfOrder.forEach(etfName => {
+                const sum = summaries[etfName];
+                if (!sum) return;
+
+                const blockId = `etf-sum-${mode}-${etfName.replace(/[^a-zA-Z0-9가-힣]/g, '')}`;
+                html += '<div class="etf-block">';
+                html += '<div class="etf-block-header">';
+                html += `<span class="etf-block-name">${etfName}</span>`;
+                html += `<button class="etf-copy-btn" onclick="copyETFSummary('${blockId}')">복사</button>`;
+                html += '</div>';
+                html += `<div class="etf-block-content" id="${blockId}">`;
+                html += formatSummaryLine('신규편입', 'label-new-in', sum.newIn, r => `${r[1]}(${r[0]})`);
+                html += formatSummaryLine('신규편출', 'label-new-out', sum.newOut, r => `${r[1]}(${r[0]})`);
+                html += formatSummaryLine('매수(증가)', 'label-buy', sum.buys, r => `${r[1]}(${fmtDelta(r[2])}${unit})`);
+                html += formatSummaryLine('매도(감소)', 'label-sell', sum.sells, r => `${r[1]}(${fmtDelta(r[2])}${unit})`);
+                html += '</div></div>';
+            });
+
+            area.innerHTML = html;
+        }
+
+        // ─── 통합 요약 ───────────────────────────────────────
+
+        function buildIntegratedSummary(summaries, globalETFs, domesticETFs, fmtDelta, unit, mode) {
+            function aggregate(etfList) {
+                const newIn = [], newOut = [], buys = [], sells = [];
+                etfList.forEach(etfName => {
+                    const sum = summaries[etfName];
+                    if (!sum) return;
+                    sum.newIn.forEach(r => newIn.push({ etf: etfName, data: r }));
+                    sum.newOut.forEach(r => newOut.push({ etf: etfName, data: r }));
+                    sum.buys.forEach(r => buys.push({ etf: etfName, data: r }));
+                    sum.sells.forEach(r => sells.push({ etf: etfName, data: r }));
+                });
+                return { newIn, newOut, buys, sells };
+            }
+
+            function renderAgg(agg) {
+                let html = '';
+                const categories = [
+                    { label: '신규편입', cls: 'label-new-in', items: agg.newIn },
+                    { label: '신규편출', cls: 'label-new-out', items: agg.newOut },
+                    { label: '매수(증가)', cls: 'label-buy', items: agg.buys },
+                    { label: '매도(감소)', cls: 'label-sell', items: agg.sells }
+                ];
+                categories.forEach(cat => {
+                    html += `<div class="summary-line"><span class="summary-label ${cat.cls}">${cat.label}:</span> `;
+                    if (cat.items.length === 0) {
+                        html += '<span class="summary-none">없음</span>';
+                    } else {
+                        const formatted = cat.items.map(r => {
+                            const shortETF = r.etf.replace('TIME ', '');
+                            if (cat.label.includes('편입') || cat.label.includes('편출')) {
+                                return `${r.data[1]}(${shortETF})`;
+                            }
+                            return `${r.data[1]}(${fmtDelta(r.data[2])}${unit}, ${shortETF})`;
+                        });
+                        html += '<span class="summary-items">' + formatted.join(', ') + '</span>';
+                    }
+                    html += '</div>';
+                });
+                return html;
+            }
+
+            const globalAgg = aggregate(globalETFs);
+            const domesticAgg = aggregate(domesticETFs);
+
+            let html = '<div class="integrated-block" id="integrated-summary-' + mode + '">';
+            html += '<div class="integrated-group-title">글로벌 ETF</div>';
+            html += renderAgg(globalAgg);
+            html += '<div class="integrated-group-title">국내 ETF</div>';
+            html += renderAgg(domesticAgg);
+            html += '</div>';
+            return html;
+        }
+
+        // ─── 정렬 ────────────────────────────────────────────
+
+        function sortBy(col) {
+            if (STATE.sortCol === col) {
+                STATE.sortDir = STATE.sortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                STATE.sortCol = col;
+                STATE.sortDir = 'asc';
+            }
+            render();
+        }
+
+        function sortIcon(col) {
+            if (STATE.sortCol !== col) return '';
+            return STATE.sortDir === 'asc' ? ' ▲' : ' ▼';
+        }
+
+        // ─── 복사 기능 ──────────────────────────────────────
+
+        function copySummary(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const text = el.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = el.parentElement.querySelector('.copy-btn');
+                if (btn) {
+                    btn.textContent = '복사됨!';
+                    btn.classList.add('copied');
+                    setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1500);
+                }
+            });
+        }
+
+        function copyETFSummary(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const text = el.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = el.parentElement.querySelector('.etf-copy-btn');
+                if (btn) {
+                    btn.textContent = '복사됨!';
+                    btn.classList.add('copied');
+                    setTimeout(() => { btn.textContent = '복사'; btn.classList.remove('copied'); }, 1500);
+                }
+            });
+        }
+
+        function copyAllSummaries(mode) {
+            const el = document.getElementById('integrated-summary-' + mode);
+            if (!el) return;
+
+            // 개별 ETF도 합쳐서 복사
+            let text = el.innerText + '\n\n';
+            document.querySelectorAll('.etf-block').forEach(block => {
+                const name = block.querySelector('.etf-block-name');
+                const content = block.querySelector('.etf-block-content');
+                if (name && content) {
+                    text += '▶ ' + name.innerText + '\n' + content.innerText + '\n\n';
+                }
+            });
+
+            navigator.clipboard.writeText(text.trim()).then(() => {
+                const btns = document.querySelectorAll('.summary-tab-buttons .copy-btn');
+                btns.forEach(btn => {
+                    btn.textContent = '복사됨!';
+                    btn.classList.add('copied');
+                    setTimeout(() => { btn.textContent = '전체 복사'; btn.classList.remove('copied'); }, 1500);
+                });
+            });
+        }
+
+        // ─── 초기 실행 ──────────────────────────────────────
+
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>

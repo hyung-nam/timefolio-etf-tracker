@@ -1,0 +1,14 @@
+{
+  "name": "timefolio-etf-tracker",
+  "version": "2.0.0",
+  "description": "TIMEFOLIO 17개 액티브 ETF 구성종목 추적기",
+  "private": true,
+  "scripts": {
+    "update": "node scripts/update.js",
+    "build": "node scripts/build_latest.js",
+    "update-and-build": "node scripts/update.js && node scripts/build_latest.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
