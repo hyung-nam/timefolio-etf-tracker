@@ -2,8 +2,8 @@ name: Daily ETF Update & Deploy
 
 on:
   schedule:
-    # 매일 08:00 KST = 23:00 UTC (전날)
-    - cron: '0 23 * * *'
+    # 월~금 08:00 KST = 전날 23:00 UTC
+    - cron: '0 23 * * 0-4'
   workflow_dispatch:
     inputs:
       date:
@@ -13,8 +13,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   update:
@@ -28,13 +26,9 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
-        run: npm ci --prefix deploy_v2 || true
-
       # Step 1: 크롤링
       - name: Crawl ETF data
         run: |
-          cd deploy_v2
           if [ -n "${{ github.event.inputs.date }}" ]; then
             node scripts/update.js "${{ github.event.inputs.date }}"
           else
@@ -43,45 +37,18 @@ jobs:
 
       # Step 2: 프론트엔드 JSON 빌드
       - name: Build latest JSON
-        run: |
-          cd deploy_v2
-          node scripts/build_latest.js
+        run: node scripts/build_latest.js
 
-      # Step 3: 변경사항 커밋 & 푸시
+      # Step 3: 변경사항 커밋 & 푸시 → GitHub Pages 자동 배포 (branch 방식)
       - name: Commit and push data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add deploy_v2/data/
+          git add data/
           if git diff --staged --quiet; then
-            echo "No changes to commit"
+            echo "No changes to commit (공휴일 또는 데이터 미변경)"
           else
-            DATE=$(date -u +"%Y-%m-%d")
-            git commit -m "chore: update ETF data ($DATE)"
+            DATE=$(TZ=Asia/Seoul date +"%Y-%m-%d")
+            git commit -m "data: ${DATE} ETF 구성종목 데이터 업데이트"
             git push
           fi
-
-  # GitHub Pages 배포 (별도 잡)
-  deploy:
-    needs: update
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: main
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: deploy_v2
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
