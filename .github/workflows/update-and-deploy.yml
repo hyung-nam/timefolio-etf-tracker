@@ -1,9 +1,7 @@
 name: Daily ETF Update & Deploy
 
 on:
-  schedule:
-    # 테스트: 1시간마다 실행 (정상 확인 후 오전 8시로 변경 예정)
-    - cron: '0 * * * *'
+  # schedule 제거 — GitHub Actions cron이 불안정하여 cron-job.org 외부 트리거 사용
   workflow_dispatch:
     inputs:
       date:
